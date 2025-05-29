@@ -7,6 +7,7 @@ const viewRouter = require("./routes/view");
 const worldDB  = require("./db");
 const statusRouter = require("./routes/status");
 const cors = require('cors');
+const commentRouter = require("./routes/comments");
 require("dotenv").config();
 
 const PORT = process.env.PORT || 3000;
@@ -25,6 +26,7 @@ app.use(authRouter);
 app.use(postRouter);
 app.use(viewRouter);
 app.use(statusRouter);
+app.use(commentRouter);
 
 //error handler
 app.use(errorHandler)

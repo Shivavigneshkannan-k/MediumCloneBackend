@@ -1,7 +1,9 @@
 const express = require("express");
 const userAuth = require("../middleware/userAuth");
 const worldDB = require("../db");
-const { message } = require("statuses");
+const cloudinary = require("../cloudinary")
+const fs = require("fs")
+const upload = require("../middleware/multer.middleware");
 const viewRouter = express.Router();
 
 viewRouter.get("/view/all", userAuth, async (req, res, next) => {
@@ -25,31 +27,43 @@ viewRouter.get("/view/profile",userAuth,async (req,res,next)=>{
   }
 })
 
-viewRouter.patch("/edit/profile",userAuth,async(req,res,next)=>{
+viewRouter.patch("/edit/profile",userAuth,upload.single("image"),async(req,res,next)=>{
   try{
-    
+    const localPath = req?.file?.path;
+
     const ALLOWED_FIELD = ["web development","social","nature","technology"]
     const {userName,bio,interest} = req.body;
     if(!userName){
       const error = new Error("userName can't be empty");
-      err.statusCode = 400;
+      error.statusCode = 400;
       throw error;
     }
+    
     else if(bio.length>200){
       const error = new Error("bio should be with in 200 letter");
-      err.statusCode = 400;
+      error.statusCode = 400;
       throw error;
     }
     else if(interest!='' && !ALLOWED_FIELD.includes(interest)){
       const error = new Error("invalid interest");
-      err.statusCode = 400;
+      error.statusCode = 400;
       throw error;
     }
-
+    if(localPath){
+      result = await cloudinary.uploader.upload(localPath);
+      fs.unlink(localPath,(err)=>{
+        if(err) console.err("failed to delete local image",err);
+      })
+      const user = await worldDB.query(`UPDATE users SET username=$1,interest = $2,about=$3,photo_url=$4 WHERE user_id=$5 RETURNING *`,[
+        userName,interest,bio,result.secure_url,req.user.user_id
+      ])
+      user.rows[0]["photo_url"] = result.secure_url;
+      res.status(200).json({success:true,message:"profile updated",data: user.rows[0]});
+    } 
+    
     const user = await worldDB.query(`UPDATE users SET username=$1,interest = $2,about=$3 WHERE user_id=$4 RETURNING *`,[
       userName,interest,bio,req.user.user_id
     ])
-
     res.status(200).json({success:true,message:"profile updated",data: user.rows[0]});
 
 
