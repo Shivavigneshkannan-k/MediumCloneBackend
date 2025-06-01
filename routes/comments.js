@@ -1,7 +1,6 @@
 const express = require("express");
 const userAuth = require("../middleware/userAuth");
 const worldDB = require("../db");
-const { message } = require("statuses");
 const commentRouter = express.Router();
 const { v4: uuidv4 } = require("uuid");
 const { createError } = require("../utils/createError");
