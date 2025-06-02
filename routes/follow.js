@@ -3,9 +3,7 @@ const userAuth = require("../middleware/userAuth");
 const worldDB = require("../db");
 const { createError } = require("../utils/createError");
 const followRouter = express.Router();
-
 followRouter.use(userAuth);
-
 followRouter.post("/follow/:creator_id", async (req, res, next) => {
   try {
     const creator_id = req.params.creator_id;
@@ -54,6 +52,7 @@ followRouter.delete("/follow/:creator_id", async (req, res, next) => {
   try {
     const creator_id = req.params.creator_id;
     const user_id = req.user.user_id;
+    console.log(req.user)
 
     // user trying to unfollow themself -- is illegal
     if (user_id === creator_id) {
@@ -95,9 +94,9 @@ followRouter.delete("/follow/:creator_id", async (req, res, next) => {
   }
 });
 
-followRouter.get("/follow/:type", async (req, res, next) => {
+followRouter.get("/follow/:type/:userId", async (req, res, next) => {
   try {
-    const user_id = req.user.user_id;
+    const user_id = req.params.userId;
     const type = req.params.type;
     const ALLOWED_TYPES = ["following", "followers"];
     if (!ALLOWED_TYPES.includes(type)) {
@@ -116,8 +115,8 @@ followRouter.get("/follow/:type", async (req, res, next) => {
       );
     } else {
       list = await worldDB.query(
-        `select u.username follower_name, u.user_id follower_id,
-        (case when fb.user_id is not null then true else false end) as follow_back
+        `select u.username as username, u.user_id as user_id,u.photo_url,
+        (case when fb.user_id is not null then true else false end) as follow
         from users as u
         join followers f
         on f.user_id = u.user_id

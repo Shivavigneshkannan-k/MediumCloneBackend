@@ -22,8 +22,9 @@ viewRouter.get("/view/all", userAuth, async (req, res, next) => {
       on p.post_id = r.post_id
       inner join users as u
       on u.user_id = p.user_id
-      group by p.post_id,p.title,p.body,p.user_id,u.username,u.photo_url;`
-    ,[req.user.user_id]);
+      group by p.post_id,p.title,p.body,p.user_id,u.username,u.photo_url;`,
+      [req.user.user_id]
+    );
     res
       .status(200)
       .json({ success: true, message: "all post", data: posts.rows });
@@ -135,9 +136,8 @@ viewRouter.get("/view/reactions", userAuth, async (req, res, next) => {
         SUM(CASE WHEN reaction = 'like' THEN 1 ELSE 0 END) AS likes, 
         SUM(CASE WHEN reaction = 'dislike' THEN 1 ELSE 0 END) AS dislikes
         FROM reactions AS r RIGHT JOIN posts AS p ON r.post_id = p.post_id
-        GROUP BY p.post_id,p.title,p.body ;
-        `);
-       
+        GROUP BY p.post_id,p.title,p.body;
+      `);
 
     res
       .status(200)
@@ -165,9 +165,21 @@ viewRouter.get("/view/user/post/:userId", userAuth, async (req, res, next) => {
   try {
     const userId = req.params.userId;
     //checking user existence
-    const userData = await worldDB.query(`select * from users where user_id = $1`,[userId]);
-    if(userData.rows.length==0){
-      throw createError("user not found",404);
+    const userData = await worldDB.query(
+      `select u.*, exists(select 1 from followers as f
+      where f.user_id = $1
+      and f.creator_id = $2
+      ) as follow,
+      exists(select 1 from followers as f
+      where f.user_id =$2
+      and f.creator_id = $1)
+      as follow_back
+    from users as u
+    where u.user_id=$2`,
+      [req.user.user_id, userId]
+    );
+    if (userData.rows.length == 0) {
+      throw createError("user not found", 404);
     }
     const post = await worldDB.query(
       `
@@ -188,7 +200,11 @@ viewRouter.get("/view/user/post/:userId", userAuth, async (req, res, next) => {
     );
     res
       .status(200)
-      .json({ success: true, message: "reaction data", data: {posts:post.rows,user:userData.rows[0]}});
+      .json({
+        success: true,
+        message: "reaction data",
+        data: { posts: post.rows, user: userData.rows[0] }
+      });
   } catch (err) {
     next(err);
   }
