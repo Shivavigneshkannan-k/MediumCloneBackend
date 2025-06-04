@@ -3,9 +3,8 @@ const viewRouter = require("./view");
 const worldDB = require("../db");
 const userAuth = require("../middleware/userAuth");
 const statusRouter = express.Router();
-const {v4: uuidv4} = require("uuid");
-
-statusRouter.post("/status/:status/:postId", userAuth,async (req, res, next) => {
+const authorizeRoles = require("../middleware/roleAuth.middleware");
+statusRouter.post("/status/:status/:postId", userAuth,authorizeRoles("user","admin"),async (req, res, next) => {
   try {
     const postId = req.params.postId;
     const status = req.params.status;

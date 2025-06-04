@@ -4,8 +4,9 @@ const worldDB = require("../db");
 const commentRouter = express.Router();
 const { v4: uuidv4 } = require("uuid");
 const { createError } = require("../utils/createError");
+const  authorizeRoles  = require("../middleware/roleAuth.middleware");
 
-commentRouter.post("/comment/create", userAuth, async (req, res, next) => {
+commentRouter.post("/comment/create", userAuth, authorizeRoles("user",'admin'), async (req, res, next) => {
   try {
     const { post_id, commenter_id, comment } = req.body;
     const post = await worldDB.query(`select * from posts where post_id = $1`, [
@@ -40,7 +41,7 @@ commentRouter.post("/comment/create", userAuth, async (req, res, next) => {
     next(err);
   }
 });
-commentRouter.get("/comment/read/:postId", userAuth, async (req, res, next) => {
+commentRouter.get("/comment/read/:postId",authorizeRoles('guest','admin','user'), async (req, res, next) => {
   try {
     const post_id = req?.params?.postId;
     console.log(post_id);
@@ -70,10 +71,7 @@ commentRouter.get("/comment/read/:postId", userAuth, async (req, res, next) => {
   }
 });
 
-commentRouter.delete(
-  "/comment/delete/:commentId",
-  userAuth,
-  async (req, res, next) => {
+commentRouter.delete( "/comment/delete/:commentId",userAuth,authorizeRoles('user','admin'),async (req, res, next) => {
     try {
       const commentId = req.params.commentId;
       const comment = await worldDB.query(
@@ -85,7 +83,8 @@ commentRouter.delete(
       if (comment.rows.length == 0) {
         throw createError("Comment Not found", 404);
       }
-      if (comment.rows[0].commenter_id !== req.user.user_id) {
+      console.log(req.user.role)
+      if (comment.rows[0].commenter_id !== req.user.user_id && req?.user?.role!=='admin') {
         throw createError("Access Denied", 403);
       }
       const data = await worldDB.query(

@@ -3,8 +3,10 @@ const userAuth = require("../middleware/userAuth");
 const worldDB = require("../db");
 const { createError } = require("../utils/createError");
 const followRouter = express.Router();
-followRouter.use(userAuth);
-followRouter.post("/follow/:creator_id", async (req, res, next) => {
+const authorizeRoles = require('../middleware/roleAuth.middleware')
+
+
+followRouter.post("/follow/:creator_id",userAuth,authorizeRoles('user'),async (req, res, next) => {
   try {
     const creator_id = req.params.creator_id;
     const user_id = req.user.user_id;
@@ -48,7 +50,7 @@ followRouter.post("/follow/:creator_id", async (req, res, next) => {
   }
 });
 
-followRouter.delete("/follow/:creator_id", async (req, res, next) => {
+followRouter.delete("/follow/:creator_id",userAuth,authorizeRoles('user'),async (req, res, next) => {
   try {
     const creator_id = req.params.creator_id;
     const user_id = req.user.user_id;
@@ -94,7 +96,7 @@ followRouter.delete("/follow/:creator_id", async (req, res, next) => {
   }
 });
 
-followRouter.get("/follow/:type/:userId", async (req, res, next) => {
+followRouter.get("/follow/:type/:userId",authorizeRoles('user','guest','admin'), async (req, res, next) => {
   try {
     const user_id = req.params.userId;
     const type = req.params.type;

@@ -6,34 +6,49 @@ const fs = require("fs");
 const upload = require("../middleware/multer.middleware");
 const { createError } = require("../utils/createError");
 const viewRouter = express.Router();
+const authorizeRoles = require("../middleware/roleAuth.middleware");
 
-viewRouter.get("/view/all", userAuth, async (req, res, next) => {
+viewRouter.get("/view/all",authorizeRoles('admin','user','guest'), async (req, res, next) => {
   try {
-    const posts = await worldDB.query(
-      `select p.post_id,p.title,p.body,p.user_id,u.username,u.photo_url,
-        sum(case when r.reaction = 'like' then 1 else 0 end) as likes,
-        sum(case when r.reaction = 'dislike' then 1 else 0 end) as dislikes,
-        (select reaction from reactions as rs 
-          where rs.post_id = p.post_id and
-          rs.user_id = $1
-        ) as user_reaction
-      from posts as p
-      left join reactions r
-      on p.post_id = r.post_id
-      inner join users as u
-      on u.user_id = p.user_id
-      group by p.post_id,p.title,p.body,p.user_id,u.username,u.photo_url;`,
-      [req.user.user_id]
-    );
-    res
-      .status(200)
-      .json({ success: true, message: "all post", data: posts.rows });
+    let posts;
+    if(req?.user){
+      posts = await worldDB.query(
+        `select p.post_id,p.title,p.body,p.user_id,u.username,u.photo_url,
+          sum(case when r.reaction = 'like' then 1 else 0 end) as likes,
+          sum(case when r.reaction = 'dislike' then 1 else 0 end) as dislikes,
+          (select reaction from reactions as rs 
+            where rs.post_id = p.post_id and
+            rs.user_id = $1
+          ) as user_reaction
+        from posts as p
+        left join reactions r
+        on p.post_id = r.post_id
+        inner join users as u
+        on u.user_id = p.user_id
+        group by p.post_id,p.title,p.body,p.user_id,u.username,u.photo_url;`,
+        [req.user.user_id]
+      );
+    }
+    else{
+      posts = await worldDB.query(
+        `select p.post_id,p.title,p.body,p.user_id,u.username,u.photo_url,
+          sum(case when r.reaction = 'like' then 1 else 0 end) as likes,
+          sum(case when r.reaction = 'dislike' then 1 else 0 end) as dislikes
+        from posts as p
+        left join reactions r
+        on p.post_id = r.post_id
+        inner join users as u
+        on u.user_id = p.user_id
+        group by p.post_id,p.title,p.body,p.user_id,u.username,u.photo_url;`
+      );
+    }
+    res.status(200).json({ success: true, message: "all post", data: posts.rows });
   } catch (err) {
     next(err);
   }
 });
 
-viewRouter.get("/view/profile/:userId", userAuth, async (req, res, next) => {
+viewRouter.get("/view/profile/:userId",authorizeRoles('admin','guest','user'), async (req, res, next) => {
   try {
     const userId = req.params.userId;
     if (userId == req.user.user_id) {
@@ -57,7 +72,7 @@ viewRouter.get("/view/profile/:userId", userAuth, async (req, res, next) => {
     next(err);
   }
 });
-viewRouter.get("/view/me", userAuth, async (req, res, next) => {
+viewRouter.get("/view/me", userAuth, authorizeRoles('admin','user'), async (req, res, next) => {
   try {
     res.status(200).json({
       success: true,
@@ -69,14 +84,9 @@ viewRouter.get("/view/me", userAuth, async (req, res, next) => {
   }
 });
 
-viewRouter.patch(
-  "/edit/profile",
-  userAuth,
-  upload.single("image"),
-  async (req, res, next) => {
+viewRouter.patch("/edit/profile",userAuth,authorizeRoles('admin','user'),upload.single("image"),async (req, res, next) => {
     try {
       const localPath = req?.file?.path;
-
       const ALLOWED_FIELD = [
         "web development",
         "social",
@@ -88,7 +98,7 @@ viewRouter.patch(
         const error = new Error("userName can't be empty");
         error.statusCode = 400;
         throw error;
-      } else if (bio.length > 200) {
+      } else if (!bio && bio.length > 200) {
         const error = new Error("bio should be with in 200 letter");
         error.statusCode = 400;
         throw error;
@@ -98,7 +108,9 @@ viewRouter.patch(
         throw error;
       }
       if (localPath) {
-        result = await cloudinary.uploader.upload(localPath);
+        result = await cloudinary.uploader.upload(localPath,{
+          folder:"medium.fake"
+        });
         fs.unlink(localPath, (err) => {
           if (err) console.err("failed to delete local image", err);
         });
@@ -124,12 +136,13 @@ viewRouter.patch(
         data: user.rows[0]
       });
     } catch (err) {
+      console.log(err);
       next(err);
     }
   }
 );
 
-viewRouter.get("/view/reactions", userAuth, async (req, res, next) => {
+viewRouter.get("/view/reactions", async (req, res, next) => {
   try {
     const post = await worldDB.query(` 
         SELECT p.post_id,p.user_id,p.title,p.body,
@@ -161,23 +174,33 @@ viewRouter.get("/view/user/reaction", userAuth, async (req, res, next) => {
     next(err);
   }
 });
-viewRouter.get("/view/user/post/:userId", userAuth, async (req, res, next) => {
+viewRouter.get("/view/user/post/:userId", authorizeRoles('guest','admin','user'), async (req, res, next) => {
   try {
     const userId = req.params.userId;
     //checking user existence
-    const userData = await worldDB.query(
-      `select u.*, exists(select 1 from followers as f
-      where f.user_id = $1
-      and f.creator_id = $2
-      ) as follow,
-      exists(select 1 from followers as f
-      where f.user_id =$2
-      and f.creator_id = $1)
-      as follow_back
-    from users as u
-    where u.user_id=$2`,
-      [req.user.user_id, userId]
-    );
+    let userData;
+    if(req?.user){
+      
+       userData = await worldDB.query(
+        `select u.*, exists(select 1 from followers as f
+        where f.user_id = $1
+        and f.creator_id = $2
+        ) as follow,
+        exists(select 1 from followers as f
+        where f.user_id =$2
+        and f.creator_id = $1)
+        as follow_back
+      from users as u
+      where u.user_id=$2`,
+        [req.user.user_id, userId]
+      );
+    }
+    else{
+      userData = await worldDB.query(
+        `select * from users where user_id=$1`,
+        [userId]
+      );
+    }
     if (userData.rows.length == 0) {
       throw createError("user not found", 404);
     }

@@ -5,8 +5,9 @@ const worldDB = require("../db");
 const userAuth = require("../middleware/userAuth");
 const { v4: uuidv4 } = require("uuid");
 const { message } = require("statuses");
+const authorizeRoles = require("../middleware/roleAuth.middleware")
 
-postRouter.post("/post/create", userAuth, async (req, res,next) => {
+postRouter.post("/post/create", userAuth,authorizeRoles("admin",'user'), async (req, res,next) => {
   try {
     const { title, body } = req.body;
     const user_id = req.user.user_id;
@@ -26,7 +27,7 @@ postRouter.post("/post/create", userAuth, async (req, res,next) => {
     next(err);
   }
 });
-postRouter.patch("/post/edit/:postId", userAuth, async (req, res, next) => {
+postRouter.patch("/post/edit/:postId", userAuth,authorizeRoles('user'), async (req, res, next) => {
   try {
     const postId = req.params.postId;
     const { title, body } = req.body;
@@ -60,7 +61,7 @@ postRouter.patch("/post/edit/:postId", userAuth, async (req, res, next) => {
   }
 });
 
-postRouter.delete("/post/delete/:postId", userAuth, async (req, res, next) => {
+postRouter.delete("/post/delete/:postId", userAuth,authorizeRoles("admin","user"), async (req, res, next) => {
   try {
     const postId = req.params.postId;
     const post = await worldDB.query("SELECT * FROM POSTS WHERE post_id = $1", [
@@ -71,7 +72,7 @@ postRouter.delete("/post/delete/:postId", userAuth, async (req, res, next) => {
       err.statusCode = 404;
       throw err;
     }
-    if (post.rows[0].user_id !== req.user.user_id) {
+    if (post.rows[0].user_id !== req.user.user_id && req.user.role !=='admin') {
       const err = new Error("Access Denied");
       err.statusCode = 403;
       throw err;
